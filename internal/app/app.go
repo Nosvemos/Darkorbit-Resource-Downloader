@@ -176,7 +176,7 @@ func parseConfig(command string, args []string) (config, error) {
 	requestInterval := fs.Duration("request-interval", 250*time.Millisecond, "Minimum delay between starting HTTP requests, e.g. 250ms or 1s")
 	force := fs.Bool("force", false, "Redownload files even if they already exist")
 	categoryCSV := fs.String("category", "all", "Comma-separated categories: all, spacemap, do_img, core, templates, unityApi, flashAPI, resources")
-	languageCSV := fs.String("languages", "en", "Comma-separated languages for localized/template assets: en, tr, es, all")
+	languageCSV := fs.String("languages", "en", "Comma-separated languages for localized/template assets, e.g. en,de,au or all")
 	logFile := fs.String("log-file", "app.log", "Optional log file path, empty disables file logging")
 
 	if err := fs.Parse(args); err != nil {
@@ -203,6 +203,12 @@ func runSync(ctx context.Context, cfg config, pr *printer) error {
 	if err != nil {
 		return err
 	}
+	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
+	if err != nil {
+		return err
+	}
+	cfg.Languages = resolvedLanguages
+	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
 
 	if err := fetchSeeds(ctx, dl, cfg, seeds, true, pr); err != nil {
 		return err
@@ -273,6 +279,12 @@ func runPlan(ctx context.Context, cfg config, pr *printer) error {
 	if err != nil {
 		return err
 	}
+	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
+	if err != nil {
+		return err
+	}
+	cfg.Languages = resolvedLanguages
+	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
 	if err := fetchSeeds(ctx, dl, cfg, seeds, false, pr); err != nil {
 		return err
 	}
@@ -312,6 +324,12 @@ func runFetchManifests(ctx context.Context, cfg config, pr *printer) error {
 	if err != nil {
 		return err
 	}
+	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
+	if err != nil {
+		return err
+	}
+	cfg.Languages = resolvedLanguages
+	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
 	if err := fetchSeeds(ctx, dl, cfg, seeds, false, pr); err != nil {
 		return err
 	}
@@ -324,6 +342,12 @@ func runVerify(cfg config, pr *printer) error {
 	if err != nil {
 		return err
 	}
+	resolvedLanguages, err := resolveLanguages(context.Background(), cfg, seeds, pr)
+	if err != nil {
+		return err
+	}
+	cfg.Languages = resolvedLanguages
+	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
 
 	seedMissing := make([]string, 0)
 	for _, seed := range seeds {
@@ -652,8 +676,8 @@ func parseCategories(csv string) map[string]bool {
 
 func parseLanguages(csv string) map[string]bool {
 	result := map[string]bool{}
-	for _, part := range strings.Split(strings.ToLower(csv), ",") {
-		part = strings.TrimSpace(part)
+	for _, part := range strings.Split(csv, ",") {
+		part = discovery.CanonicalLanguageCode(part)
 		if part == "" {
 			continue
 		}
@@ -663,6 +687,36 @@ func parseLanguages(csv string) map[string]bool {
 		result["en"] = true
 	}
 	return result
+}
+
+func resolveLanguages(ctx context.Context, cfg config, seeds []model.Seed, pr *printer) (map[string]bool, error) {
+	if len(cfg.Languages) == 0 {
+		return map[string]bool{"en": true}, nil
+	}
+	if !cfg.Languages["all"] {
+		return cfg.Languages, nil
+	}
+
+	live, err := discovery.DiscoverLiveLanguages(ctx, cfg.BaseURL)
+	if err == nil && len(live) > 0 {
+		resolved := map[string]bool{}
+		for _, lang := range live {
+			resolved[lang] = true
+		}
+		pr.Status("DISCOVER", fmt.Sprintf("live languages: %s", strings.Join(live, ", ")))
+		return resolved, nil
+	}
+
+	fallback := discovery.ResolveBootstrapLanguages(cfg.OutputDir, seeds, cfg.Languages)
+	resolved := map[string]bool{}
+	for _, lang := range fallback {
+		resolved[lang] = true
+	}
+	if len(fallback) > 0 {
+		pr.Status("DISCOVER", fmt.Sprintf("fallback languages: %s", strings.Join(fallback, ", ")))
+		return resolved, nil
+	}
+	return resolved, err
 }
 
 func matchesCategory(category string, allowed map[string]bool) bool {
