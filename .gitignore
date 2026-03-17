@@ -1,0 +1,21 @@
+# Mirrored game assets
+/darkorbit-files/
+
+# Downloader state, logs, and temporary files
+/.app-state.json
+/app.log
+/info.log
+/dordl.log
+*.part
+
+# Go build outputs
+/app
+/app.exe
+*.test
+coverage.out
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
