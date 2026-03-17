@@ -199,16 +199,11 @@ func parseConfig(command string, args []string) (config, error) {
 
 func runSync(ctx context.Context, cfg config, pr *printer) error {
 	dl := newDownloader(cfg)
-	seeds, err := discovery.DiscoverSeeds(cfg.OutputDir)
+	preparedCfg, seeds, err := prepareSeeds(ctx, cfg, pr, true)
 	if err != nil {
 		return err
 	}
-	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
-	if err != nil {
-		return err
-	}
-	cfg.Languages = resolvedLanguages
-	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
+	cfg = preparedCfg
 
 	if err := fetchSeeds(ctx, dl, cfg, seeds, true, pr); err != nil {
 		return err
@@ -275,16 +270,11 @@ func runSync(ctx context.Context, cfg config, pr *printer) error {
 
 func runPlan(ctx context.Context, cfg config, pr *printer) error {
 	dl := newDownloader(cfg)
-	seeds, err := discovery.DiscoverSeeds(cfg.OutputDir)
+	preparedCfg, seeds, err := prepareSeeds(ctx, cfg, pr, true)
 	if err != nil {
 		return err
 	}
-	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
-	if err != nil {
-		return err
-	}
-	cfg.Languages = resolvedLanguages
-	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
+	cfg = preparedCfg
 	if err := fetchSeeds(ctx, dl, cfg, seeds, false, pr); err != nil {
 		return err
 	}
@@ -320,16 +310,11 @@ func runPlan(ctx context.Context, cfg config, pr *printer) error {
 
 func runFetchManifests(ctx context.Context, cfg config, pr *printer) error {
 	dl := newDownloader(cfg)
-	seeds, err := discovery.DiscoverSeeds(cfg.OutputDir)
+	preparedCfg, seeds, err := prepareSeeds(ctx, cfg, pr, true)
 	if err != nil {
 		return err
 	}
-	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
-	if err != nil {
-		return err
-	}
-	cfg.Languages = resolvedLanguages
-	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
+	cfg = preparedCfg
 	if err := fetchSeeds(ctx, dl, cfg, seeds, false, pr); err != nil {
 		return err
 	}
@@ -338,16 +323,11 @@ func runFetchManifests(ctx context.Context, cfg config, pr *printer) error {
 }
 
 func runVerify(cfg config, pr *printer) error {
-	seeds, err := discovery.DiscoverSeeds(cfg.OutputDir)
+	preparedCfg, seeds, err := prepareSeeds(context.Background(), cfg, pr, false)
 	if err != nil {
 		return err
 	}
-	resolvedLanguages, err := resolveLanguages(context.Background(), cfg, seeds, pr)
-	if err != nil {
-		return err
-	}
-	cfg.Languages = resolvedLanguages
-	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
+	cfg = preparedCfg
 
 	seedMissing := make([]string, 0)
 	for _, seed := range seeds {
@@ -405,6 +385,11 @@ func fetchSeeds(ctx context.Context, dl *downloader.Client, cfg config, seeds []
 		url := joinSeedURL(cfg.BaseURL, seed.RelativePath)
 		dest := filepath.Join(cfg.OutputDir, filepath.FromSlash(seed.RelativePath))
 		if err := dl.FetchToFile(ctx, url, dest); err != nil {
+			var statusErr *downloader.HTTPStatusError
+			if errors.As(err, &statusErr) && statusErr.StatusCode == 404 && discovery.IsOptionalSeed(seed) {
+				pr.Status("SKIP", fmt.Sprintf("%s (optional seed missing on this site)", seed.RelativePath))
+				continue
+			}
 			return fmt.Errorf("fetch seed %s: %w", seed.RelativePath, err)
 		}
 		pr.Status("FETCH", seed.RelativePath)
@@ -717,6 +702,33 @@ func resolveLanguages(ctx context.Context, cfg config, seeds []model.Seed, pr *p
 		return resolved, nil
 	}
 	return resolved, err
+}
+
+func prepareSeeds(ctx context.Context, cfg config, pr *printer, probeOptional bool) (config, []model.Seed, error) {
+	seeds, err := discovery.DiscoverSeeds(cfg.OutputDir)
+	if err != nil {
+		return cfg, nil, err
+	}
+
+	resolvedLanguages, err := resolveLanguages(ctx, cfg, seeds, pr)
+	if err != nil {
+		return cfg, nil, err
+	}
+	cfg.Languages = resolvedLanguages
+	seeds = discovery.AddLanguageBootstrapSeeds(cfg.OutputDir, seeds, cfg.Languages)
+
+	if !probeOptional {
+		return cfg, seeds, nil
+	}
+
+	probedSeeds, skipped, err := discovery.DiscoverAvailableSeeds(ctx, cfg.BaseURL, seeds)
+	if err != nil {
+		return cfg, nil, err
+	}
+	if len(skipped) > 0 {
+		pr.Status("DISCOVER", fmt.Sprintf("skipping %d optional seeds that returned 404", len(skipped)))
+	}
+	return cfg, probedSeeds, nil
 }
 
 func matchesCategory(category string, allowed map[string]bool) bool {

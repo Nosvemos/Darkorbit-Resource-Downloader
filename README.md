@@ -14,6 +14,7 @@ A Go-based CLI for mirroring DarkOrbit resource files from `darkorbit.com`, vali
 - Defaults localized/template downloads to English only, with optional multi-language expansion
 - Auto-discovers additional template XML files through `language_*.xml` manifests
 - Uses live locale discovery for `--languages=all` when DarkOrbit exposes the current language list
+- Skips optional bootstrap seeds that return `404` on clone sites
 
 ## Project Structure
 
@@ -88,6 +89,12 @@ Sync more gently when the server starts rate-limiting:
 go run ./cmd sync --category=all --concurrency=4 --request-interval=750ms
 ```
 
+Try a DarkOrbit-style clone with clone-friendly optional seed tolerance:
+
+```bash
+go run ./cmd fetch-manifests --base-url=https://pinkgalaxy.net --output tmp-clone-check
+```
+
 Keep a high ceiling, but let the CLI auto-reduce concurrency if 503 responses spike:
 
 ```bash
@@ -148,6 +155,7 @@ The test suite is kept in the top-level `tests/` folder.
 - By default, only English localized assets are fetched and verified. Use `--languages=en,tr,es` or `--languages=all` if you want additional language packs.
 - Language bootstrap seeds are generated dynamically from the selected `--languages` flag instead of being hardcoded to a fixed locale list.
 - When `--languages=all` is used, the CLI first tries to discover the current locale list from `darkorbit.com` and then falls back to locally discovered language seeds if live discovery is unavailable.
+- Optional seeds such as clone-specific auxiliary manifests are probed first and skipped automatically when a clone site returns `404`.
 - The downloader already retries transient `429` / `503` / `5xx` responses, respects `Retry-After`, and can automatically reduce concurrency at runtime if throttle pressure rises.
 - `language_*.xml` files are parsed as template manifests, which allows the CLI to discover additional files such as `resource_chat.xml`, `resource_auction.xml`, `resource_skillTree.xml`, and related template resources.
 - The live `unityApi/events` endpoints currently resolve via `.php`, not `.xml`.

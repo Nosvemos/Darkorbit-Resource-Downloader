@@ -220,6 +220,33 @@ func DiscoverLiveLanguages(ctx context.Context, baseURL string) ([]string, error
 	return discoverLiveLanguages(ctx, client, strings.TrimRight(baseURL, "/"))
 }
 
+func DiscoverAvailableSeeds(ctx context.Context, baseURL string, seeds []model.Seed) ([]model.Seed, []string, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	kept := make([]model.Seed, 0, len(seeds))
+	skipped := make([]string, 0)
+	for _, seed := range seeds {
+		if !IsOptionalSeed(seed) {
+			kept = append(kept, seed)
+			continue
+		}
+
+		ok, err := urlExists(ctx, client, baseURL+"/"+strings.TrimLeft(filepath.ToSlash(seed.RelativePath), "/"))
+		if err != nil {
+			kept = append(kept, seed)
+			continue
+		}
+		if ok {
+			kept = append(kept, seed)
+			continue
+		}
+		skipped = append(skipped, seed.RelativePath)
+	}
+
+	return kept, skipped, nil
+}
+
 func discoverLiveLanguages(ctx context.Context, client *http.Client, baseURL string) ([]string, error) {
 	html, err := fetchText(ctx, client, baseURL)
 	if err != nil {
@@ -349,7 +376,7 @@ func urlExists(ctx context.Context, client *http.Client, target string) (bool, e
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return true, nil
 	}
-	return false, nil
+	return false, &httpStatusError{statusCode: resp.StatusCode, target: target}
 }
 
 func fetchText(ctx context.Context, client *http.Client, target string) (string, error) {
@@ -403,6 +430,21 @@ func CanonicalLanguageCode(code string) string {
 		parts[i] = strings.ToUpper(parts[i])
 	}
 	return strings.Join(parts, "_")
+}
+
+func IsOptionalSeed(seed model.Seed) bool {
+	switch {
+	case strings.HasPrefix(seed.RelativePath, "do_img/global/xml/"):
+		return true
+	case strings.HasPrefix(seed.RelativePath, "unityApi/"):
+		return true
+	case strings.HasPrefix(seed.RelativePath, "flashAPI/"):
+		return true
+	case strings.HasPrefix(seed.RelativePath, "resources/"):
+		return true
+	default:
+		return false
+	}
 }
 
 func FilterSeeds(seeds []model.Seed, allowed map[string]bool, includeCore bool) []model.Seed {

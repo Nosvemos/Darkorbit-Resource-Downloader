@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"darkorbit-resource-downloader/internal/discovery"
+	"darkorbit-resource-downloader/internal/model"
 )
 
 func TestDiscoverSeedsFindsExpectedFiles(t *testing.T) {
@@ -211,5 +212,47 @@ func TestDiscoverLiveLanguages(t *testing.T) {
 	}
 	if got["au"] {
 		t.Fatalf("did not expect unavailable locale au to be discovered, got %v", languages)
+	}
+}
+
+func TestDiscoverAvailableSeedsSkipsOptional404Seeds(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/spacemap/xml/resources.xml":
+			_, _ = w.Write([]byte("<filecollection/>"))
+		case "/do_img/global/xml/resource_items.xml":
+			_, _ = w.Write([]byte("<filecollection/>"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	seeds := []model.Seed{
+		{RelativePath: "spacemap/xml/resources.xml", Category: "spacemap"},
+		{RelativePath: "do_img/global/xml/resource_items.xml", Category: "do_img"},
+		{RelativePath: "do_img/global/xml/resource_events.xml", Category: "do_img"},
+	}
+
+	available, skipped, err := discovery.DiscoverAvailableSeeds(context.Background(), server.URL, seeds)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotAvailable := map[string]bool{}
+	for _, seed := range available {
+		gotAvailable[seed.RelativePath] = true
+	}
+	if !gotAvailable["spacemap/xml/resources.xml"] {
+		t.Fatal("expected required spacemap seed to remain available")
+	}
+	if !gotAvailable["do_img/global/xml/resource_items.xml"] {
+		t.Fatal("expected available optional seed to remain available")
+	}
+	if gotAvailable["do_img/global/xml/resource_events.xml"] {
+		t.Fatal("did not expect missing optional seed to remain available")
+	}
+	if len(skipped) != 1 || skipped[0] != "do_img/global/xml/resource_events.xml" {
+		t.Fatalf("unexpected skipped seeds: %v", skipped)
 	}
 }
