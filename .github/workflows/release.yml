@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to release (e.g. v1.0.0)'
+        required: true
+        type: string
+      body:
+        description: 'Release notes / description'
+        required: false
+        type: string
+        default: 'Automated release from GitHub Actions.'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22'
+
+      - name: Determine Version
+        id: versioning
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            # Ensure it starts with v
+            if [[ ! "$VERSION" =~ ^v ]]; then
+              VERSION="v$VERSION"
+            fi
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+            echo "CREATE_TAG=true" >> $GITHUB_ENV
+          else
+            VERSION="${{ github.ref_name }}"
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+            echo "CREATE_TAG=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create Git Tag (for manual trigger)
+        if: env.CREATE_TAG == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ env.VERSION }}" -m "Release ${{ env.VERSION }}"
+          git push origin "${{ env.VERSION }}"
+
+      - name: Build Windows Executable
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X darkorbit-resource-downloader/internal/app.Version=${{ env.VERSION }}" -o darkorbit-downloader.exe ./cmd
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+          body: ${{ inputs.body || 'Automated release of DarkOrbit Resource Downloader.' }}
+          files: |
+            darkorbit-downloader.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

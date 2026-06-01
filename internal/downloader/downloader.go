@@ -207,6 +207,8 @@ func (c *Client) fetchToFile(ctx context.Context, url, destination string) error
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

@@ -21,7 +21,6 @@ var hardcodedSeeds = []model.Seed{
 	{RelativePath: "spacemap/preloader.swf", Category: "core"},
 	{RelativePath: "spacemap/loadingscreen.swf", Category: "core"},
 	{RelativePath: "spacemap/main.swf", Category: "core"},
-	{RelativePath: "spacemap/xml/maps.php", Category: "core"},
 	{RelativePath: "spacemap/xml/profile.xml", Category: "spacemap"},
 	{RelativePath: "spacemap/xml/resources.xml", Category: "spacemap"},
 	{RelativePath: "spacemap/xml/resources_3d.xml", Category: "spacemap"},
@@ -31,11 +30,6 @@ var hardcodedSeeds = []model.Seed{
 	{RelativePath: "do_img/global/xml/resource_events.xml", Category: "do_img"},
 	{RelativePath: "do_img/global/xml/resource_achievements.xml", Category: "do_img"},
 	{RelativePath: "do_img/global/xml/resource_jumpgate.xml", Category: "do_img"},
-	{RelativePath: "unityApi/events/spaceSearch.php", Category: "unityApi"},
-	{RelativePath: "unityApi/events/ssRewards.php", Category: "unityApi"},
-	{RelativePath: "flashAPI/brNews.php", Category: "flashAPI"},
-	{RelativePath: "flashAPI/dailyLogin.php", Category: "flashAPI"},
-	{RelativePath: "flashAPI/loadingScreen.php", Category: "flashAPI"},
 	{RelativePath: "resources/resource_command_center.xml", Category: "resources"},
 	{RelativePath: "resources/command-center/positions.xml", Category: "resources"},
 }
@@ -103,7 +97,7 @@ func DiscoverSeeds(outputDir string) ([]model.Seed, error) {
 
 func categoryFor(rel string) string {
 	switch {
-	case rel == "crossdomain.xml" || strings.HasSuffix(rel, ".swf") || strings.HasSuffix(rel, "maps.php"):
+	case rel == "crossdomain.xml" || strings.HasSuffix(rel, ".swf"):
 		return "core"
 	case strings.HasPrefix(rel, "spacemap/templates/"):
 		return "templates"
@@ -127,9 +121,6 @@ func isSeedCandidate(rel string) bool {
 		return false
 	}
 	base := path.Base(rel)
-	if base == "index.php" {
-		return false
-	}
 	switch {
 	case strings.HasPrefix(rel, "spacemap/templates/"):
 		return strings.HasPrefix(base, "language_") && strings.HasSuffix(base, ".xml")
@@ -143,12 +134,6 @@ func isSeedCandidate(rel string) bool {
 		return true
 	case strings.HasPrefix(rel, "unityApi/events/") && strings.HasSuffix(rel, ".xml"):
 		return false
-	case strings.HasPrefix(rel, "unityApi/events/") && strings.HasSuffix(rel, ".php"):
-		return true
-	case strings.HasPrefix(rel, "flashAPI/") && strings.HasSuffix(rel, ".php"):
-		return true
-	case rel == "spacemap/xml/maps.php":
-		return true
 	default:
 		return false
 	}
@@ -365,6 +350,8 @@ func urlExists(ctx context.Context, client *http.Client, target string) (bool, e
 	if err != nil {
 		return false, err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, err
@@ -384,6 +371,8 @@ func fetchText(ctx context.Context, client *http.Client, target string) (string,
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "*/*")
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

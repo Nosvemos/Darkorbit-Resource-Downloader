@@ -26,9 +26,10 @@ func TestDiscoverSeedsFindsExpectedFiles(t *testing.T) {
 	}
 
 	mustWrite("spacemap/templates/en/resource_chat.xml")
-	mustWrite("unityApi/events/spaceSearch.php")
-	mustWrite("flashAPI/brNews.php")
+	mustWrite("spacemap/xml/resources.xml")
+	mustWrite("do_img/global/xml/resource_items.xml")
 	mustWrite("resources/resource_command_center.xml")
+	mustWrite("unityApi/events/spaceSearch.php")
 	mustWrite("spacemap_decompiled/ignore.xml")
 	mustWrite("index.php")
 
@@ -45,17 +46,20 @@ func TestDiscoverSeedsFindsExpectedFiles(t *testing.T) {
 	if _, ok := seen["spacemap/templates/en/resource_chat.xml"]; ok {
 		t.Fatal("did not expect localized template resource xml to be treated as a seed")
 	}
-	if seen["unityApi/events/spaceSearch.php"] != "unityApi" {
-		t.Fatalf("expected unityApi seed, got %q", seen["unityApi/events/spaceSearch.php"])
+	if seen["spacemap/xml/resources.xml"] != "spacemap" {
+		t.Fatalf("expected spacemap seed, got %q", seen["spacemap/xml/resources.xml"])
 	}
-	if seen["flashAPI/brNews.php"] != "flashAPI" {
-		t.Fatalf("expected flashAPI seed, got %q", seen["flashAPI/brNews.php"])
+	if seen["do_img/global/xml/resource_items.xml"] != "do_img" {
+		t.Fatalf("expected do_img seed, got %q", seen["do_img/global/xml/resource_items.xml"])
 	}
 	if seen["resources/resource_command_center.xml"] != "resources" {
 		t.Fatalf("expected resources seed, got %q", seen["resources/resource_command_center.xml"])
 	}
 	if _, ok := seen["spacemap_decompiled/ignore.xml"]; ok {
 		t.Fatal("did not expect decompiled files to be discovered as seeds")
+	}
+	if _, ok := seen["unityApi/events/spaceSearch.php"]; ok {
+		t.Fatal("did not expect PHP files to be discovered as seeds")
 	}
 	if _, ok := seen["index.php"]; ok {
 		t.Fatal("did not expect index.php to be discovered as a seed")

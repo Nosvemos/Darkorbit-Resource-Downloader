@@ -15,15 +15,15 @@ import (
 	"darkorbit-resource-downloader/internal/model"
 )
 
-func TestFetchToFilePersistsXMLAndPHPResponses(t *testing.T) {
+func TestFetchToFilePersistsXMLAndTextResponses(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/manifest.xml":
 			w.Header().Set("Content-Type", "application/xml")
 			_, _ = w.Write([]byte("<filecollection></filecollection>"))
-		case "/endpoint.php":
+		case "/endpoint.txt":
 			w.Header().Set("Content-Type", "text/plain")
-			_, _ = w.Write([]byte("<?php echo 'ok';"))
+			_, _ = w.Write([]byte("plain text content"))
 		default:
 			http.NotFound(w, r)
 		}
@@ -45,16 +45,16 @@ func TestFetchToFilePersistsXMLAndPHPResponses(t *testing.T) {
 		t.Fatalf("unexpected xml content: %q", string(xmlData))
 	}
 
-	phpDest := filepath.Join(dir, "unityApi", "events", "spaceSearch.php")
-	if err := client.FetchToFile(context.Background(), server.URL+"/endpoint.php", phpDest); err != nil {
+	txtDest := filepath.Join(dir, "unityApi", "events", "spaceSearch.txt")
+	if err := client.FetchToFile(context.Background(), server.URL+"/endpoint.txt", txtDest); err != nil {
 		t.Fatal(err)
 	}
-	phpData, err := os.ReadFile(phpDest)
+	txtData, err := os.ReadFile(txtDest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(phpData) != "<?php echo 'ok';" {
-		t.Fatalf("unexpected php content: %q", string(phpData))
+	if string(txtData) != "plain text content" {
+		t.Fatalf("unexpected text content: %q", string(txtData))
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"darkorbit-resource-downloader/internal/state"
 	"github.com/charmbracelet/lipgloss"
 )
+
+var Version = "1.0.0-dev"
 
 type config struct {
 	BaseURL             string
@@ -119,7 +122,42 @@ func (p *printer) writeStyled(styled, plain string) {
 	}
 }
 
+func printVersion(pr *printer) {
+	bannerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("39")).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(1, 4).
+		Margin(1, 0)
+
+	content := fmt.Sprintf("DARKORBIT RESOURCE DOWNLOADER\n\nVersion:  %s\nPlatform: %s/%s\nGo:       %s",
+		Version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+	pr.Println(bannerStyle.Render(content))
+}
+
 func Run(ctx context.Context, args []string) error {
+	for _, arg := range args {
+		if arg == "--version" || arg == "-v" || arg == "version" {
+			pr, err := newPrinter("")
+			if err != nil {
+				return err
+			}
+			defer pr.Close()
+			printVersion(pr)
+			return nil
+		}
+		if arg == "--help" || arg == "-h" || arg == "help" {
+			pr, err := newPrinter("")
+			if err != nil {
+				return err
+			}
+			defer pr.Close()
+			printUsage(pr)
+			return nil
+		}
+	}
+
 	command := "sync"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		command = args[0]
@@ -758,25 +796,36 @@ func countFetchedSeeds(seeds []model.Seed, allowed map[string]bool, languages ma
 }
 
 func printUsage(pr *printer) {
-	pr.Title("Usage: go run ./cmd [command] [flags]")
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+
+	pr.Println(titleStyle.Render("Usage: go run ./cmd <command> [flags]") + "\n")
+
+	pr.Println(sectionStyle.Render("COMMANDS:"))
+	pr.Printf("  %s %s\n", nameStyle.Render("sync                    "), descStyle.Render("Fetch latest manifests/core files and download missing resources"))
+	pr.Printf("  %s %s\n", nameStyle.Render("plan                    "), descStyle.Render("Fetch latest manifests and print planned downloads without downloading"))
+	pr.Printf("  %s %s\n", nameStyle.Render("fetch-manifests         "), descStyle.Render("Refresh local manifests, language files, and bootstrap templates only"))
+	pr.Printf("  %s %s\n", nameStyle.Render("verify                  "), descStyle.Render("Validate integrity of local files against current local manifests"))
+	pr.Printf("  %s %s\n\n", nameStyle.Render("version                 "), descStyle.Render("Display build version, OS/architecture, and compiler runtime information"))
+
+	pr.Println(sectionStyle.Render("GENERAL OPTIONS:"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--base-url              "), descStyle.Render("Base URL of the DarkOrbit game server (default \"https://www.darkorbit.com\")"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--output                "), descStyle.Render("Directory where local mirror is saved (default \"darkorbit-files\")"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--force                 "), descStyle.Render("Force redownload of files even if hashes and metadata match (default false)"))
+	pr.Printf("  %s %s\n\n", nameStyle.Render("--log-file              "), descStyle.Render("Output path for execution log file; pass empty to disable (default \"app.log\")"))
+
+	pr.Println(sectionStyle.Render("CONCURRENCY & PACING:"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--concurrency           "), descStyle.Render("Number of concurrent download threads (default 8)"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--min-concurrency       "), descStyle.Render("Lower bound for the runtime auto-concurrency tuner (default 1)"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--auto-tune-concurrency "), descStyle.Render("Dynamically scale concurrency down on 429/503 responses and back up when stable (default true)"))
+	pr.Printf("  %s %s\n\n", nameStyle.Render("--request-interval      "), descStyle.Render("Enforced delay between starting sequential HTTP requests, e.g. 250ms (default 250ms)"))
+
+	pr.Println(sectionStyle.Render("FILTERS & LOCALIZATION:"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--category              "), descStyle.Render("Comma-separated asset categories: spacemap, do_img, core, templates, etc. (default \"all\")"))
+	pr.Printf("  %s %s\n", nameStyle.Render("--languages             "), descStyle.Render("Comma-separated language codes to download (e.g. en,de,tr) or \"all\" (default \"en\")"))
 	pr.Println()
-	pr.Println("Commands:")
-	pr.Println("  sync             Fetch latest manifests/core files and download missing resources")
-	pr.Println("  plan             Fetch latest manifests and print what would be downloaded")
-	pr.Println("  fetch-manifests  Refresh local manifest/template files only")
-	pr.Println("  verify           Compare local files against the current local manifests")
-	pr.Println()
-	pr.Println("Common flags:")
-	pr.Println("  --base-url       Default: https://www.darkorbit.com")
-	pr.Println("  --output         Default: darkorbit-files")
-	pr.Println("  --concurrency    Default: 8")
-	pr.Println("  --min-concurrency Default: 1")
-	pr.Println("  --auto-tune-concurrency Default: true")
-	pr.Println("  --request-interval Default: 250ms")
-	pr.Println("  --category       Default: all")
-	pr.Println("  --languages      Default: en")
-	pr.Println("  --force          Redownload resources even if they already exist")
-	pr.Println("  --log-file       Default: app.log")
 }
 
 func newDownloader(cfg config) *downloader.Client {
